@@ -33,14 +33,16 @@ export function neuerStand(now = Date.now()) {
     boden: Array(START.felderMax).fill(100),       // Fruchtbarkeit 0–100
     wasser: Array(START.felderMax).fill(0),        // 0–1
     letzte: Array(START.felderMax).fill(null),     // letzte Familie je Feld
-    gebaeude: { brunnen: 0, gewaechshaus: 0, scheune: 0, marktstand: 0, kompost: 0 },
+    gebaeude: { brunnen: 0, gewaechshaus: 0, scheune: 0, marktstand: 0, kompost: 0, karawane: 0 },
+    reisen: [],           // Aufbruch-Reisen unterwegs
+    auftraege: [],        // Bestellungen aus dem Dorf
     lager: [],            // Ernte: { id, muts:[], n }
     samen: [],            // Samentasche: { id, muts:[], n }
     gekauft: { stunde: 0, n: {} },
     nachfrage: {},        // id -> { n, t }
     entdeckt: {},         // id -> { p, g, best }
     letztesWetter: null,
-    stat: { geerntet: 0, verkauft: 0, verdient: 0 },
+    stat: { geerntet: 0, verkauft: 0, verdient: 0, reisen: 0, auftraege: 0 },
     einst: { ton: true },
   };
 }
@@ -145,7 +147,7 @@ export function tick(st, now, rnd = Math.random) {
 }
 
 // ── Aktionen ────────────────────────────────────────────
-function eintrag(arr, id, muts, n) {
+export function eintrag(arr, id, muts, n) {
   const k = itemKey(id, muts);
   const e = arr.find(x => itemKey(x.id, x.muts) === k);
   if (e) e.n += n; else arr.push({ id, muts: (muts || []).slice(), n });

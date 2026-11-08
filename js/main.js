@@ -1,6 +1,8 @@
 import { PLANTS, PLANT_IDS, RARITIES, HIDDEN, RARITY_COLOR, MUT, SEASONS, SEASON_KEYS, BUILDINGS, START, MIN, STUNDE, feldPreis, LAGER_STUFEN } from './data.js';
 import * as L from './logic.js';
 import * as Art from './art.js';
+import * as Rz from './reisen.js';
+import * as Au from './auftraege.js';
 
 const COLS = START.spalten;
 const $ = s => document.querySelector(s);
@@ -34,6 +36,7 @@ let panel = null;          // offenes Panel
 let panelArg = null;
 let lagerReiter = 'ernte';
 let indexFilter = 'alle';
+let ergebnis = null;
 const floats = [];
 
 // ── Ton ────────────────────────────────────────────────
@@ -114,8 +117,10 @@ let ereignisAnzahl = 0;
 function logikTick() {
   const now = Date.now();
   const ev = L.tick(st, now) || [];
+  Au.auftraegeAuffuellen(st, now);
   for (const e of ev) if (e.m === 'gold' || e.m === 'regenbogen' || e.m === 'geladen') { floatText(e.idx, MUT[e.m].name + '!', '#ffe27a'); }
   kopfAktualisieren(now);
+  if ((panel === 'aufbruch' || panel === 'auftraege') && Math.floor(now / 1000) % 5 === 0) renderPanel();
 }
 function kopfAktualisieren(now = Date.now()) {
   $('#v-geld').textContent = fmt(st.geld);
@@ -134,6 +139,8 @@ function kopfAktualisieren(now = Date.now()) {
       Art.plantIcon(a.querySelector('canvas'), e.id, e.muts);
     }
   } else if (a.innerHTML) { a.innerHTML = ''; a.dataset.key = ''; a.dataset.n = ''; }
+  const bereit = st.reisen.filter(r => Rz.reiseBereit(r, now)).length, el2 = $('#n-reise'); el2.style.display = bereit ? 'block' : 'none'; el2.textContent = bereit;
+  const lief = st.auftraege.filter(a => Au.habe(st, a) >= a.n).length, el3 = $('#n-auf'); el3.style.display = lief ? 'block' : 'none'; el3.textContent = lief;
   $('#hinweis').textContent = hinweis(now);
   if (panel === 'markt') marktZeit();
 }
@@ -196,6 +203,10 @@ function renderPanel() {
   const now = Date.now(); let html = '', titel = '';
   if (panel === 'markt') { titel = 'Samen-Markt'; html = htmlMarkt(now); }
   else if (panel === 'lager') { titel = 'Lager'; html = htmlLager(now); }
+  else if (panel === 'auftraege') { titel = 'Aufträge aus dem Dorf'; html = htmlAuftraege(now); }
+  else if (panel === 'aufbruch') { titel = 'Aufbruch'; html = htmlAufbruch(now); }
+  else if (panel === 'ereignis') { titel = 'Unterwegs'; html = htmlEreignis(); }
+  else if (panel === 'ergebnis') { titel = 'Zurück vom Aufbruch'; html = htmlErgebnis(); }
   else if (panel === 'bauen') { titel = 'Hof ausbauen'; html = htmlBauen(); }
   else if (panel === 'index') { titel = 'Pflanzen-Index'; html = htmlIndex(); }
   else if (panel === 'pflanze') { titel = PLANTS[panelArg].name; html = htmlPflanze(panelArg); }
@@ -247,6 +258,42 @@ function htmlLager(now) {
     h += `<div class="karte">${pi(e.id)}<div class="mitte"><div class="name">${esc(p.name)} × ${e.n}</div><div class="klein">Wächst ${dauer(p.min * MIN)} · ${p.typ === 'm' ? 'mehrfach ernten' : 'einmal ernten'}</div></div><div class="rechts"><button class="knopf gruen klein" data-act="waehlen" data-key="${esc(key)}">Pflanzen</button></div></div>`;
   }
   return h;
+}
+function htmlAuftraege(now) {
+  let h = `<div class="info">Das Dorf bestellt Ernte. Liefere aus dem Lager und bekomme mehr als beim Verkauf, dazu Ruf. Neue Bestellungen kommen von allein.</div>`;
+  st.auftraege.forEach((a, i) => {
+    const p = PLANTS[a.id], hab = Au.habe(st, a), ok = hab >= a.n;
+    h += `<div class="karte">${pi(a.id, a.mut ? ['gold'] : [])}<div class="mitte"><div class="name">${a.n}× ${esc(p.name)}${a.mut ? ' <span class="mut">mit Mutation</span>' : ''}</div><div class="klein">Du hast ${hab} von ${a.n} · noch ${dauer(a.bis - now)}</div><div class="klein">Lohn ${fmt(a.lohn)} € + ${a.ruf} Ruf</div></div><div class="rechts"><button class="knopf ${ok ? 'gruen' : 'grau'} klein" data-act="liefern" data-i="${i}" ${ok ? '' : 'disabled'}>Liefern</button></div></div>`;
+  });
+  return h;
+}
+function htmlAufbruch(now) {
+  let h = `<div class="info">Schick einen Wagen los. Er kommt mit Samen zurück, auch mit solchen, die der Markt (noch) nicht verkauft. Unterwegs passiert manchmal etwas. Wagen: ${st.reisen.length}/${Rz.slots(st)}.</div>`;
+  st.reisen.forEach((r, i) => {
+    const G = Rz.GEBIETE[r.gi], D = Rz.DAUER[r.di], fertig = Rz.reiseBereit(r, now), pr = Math.min(100, Math.round(100 * (now - r.start) / (r.ende - r.start)));
+    h += `<div class="karte" style="flex-direction:column;align-items:stretch"><div class="zeile"><b>${G.name} (${D.name})</b><span>${fertig ? 'zurück!' : 'noch ' + dauer(r.ende - now)}</span></div><div class="balken"><i style="width:${pr}%;background:${G.farbe}"></i></div>${fertig ? `<button class="knopf gruen" data-act="reiseheim" data-i="${i}">Zurückkehren</button>` : ''}</div>`;
+  });
+  h += '<h3>Neue Reise</h3>';
+  Rz.GEBIETE.forEach((G, gi) => {
+    const offen = Rz.gebietOffen(st, gi);
+    h += `<div class="karte" style="flex-direction:column;align-items:stretch;${offen ? '' : 'opacity:.55'}"><div class="zeile"><b style="color:${Art.shade(G.farbe, -0.35)}">${G.name}</b><span class="klein">${offen ? 'Funde bis ' + Rz.hoechsteSeltenheit(gi) : 'ab ' + G.ruf + ' Ruf'}</span></div><div class="klein">${G.text}</div>`;
+    if (offen) h += `<div style="display:flex;gap:6px;margin-top:6px">${Rz.DAUER.map((D, di) => `<button class="knopf gold klein" style="flex:1" data-act="reise" data-g="${gi}" data-d="${di}" ${st.geld < Rz.reiseKosten(gi, di) ? 'disabled' : ''}>${D.name}<br>${dauer(D.ms)}<br>${fmt(Rz.reiseKosten(gi, di))} €</button>`).join('')}</div>`;
+    h += '</div>';
+  });
+  return h;
+}
+function htmlEreignis() {
+  const r = st.reisen[panelArg]; if (!r) return '<div class="leer">Keine Reise.</div>';
+  const ev = Rz.EREIGNISSE[Rz.ereignisIndex(r)];
+  return `<div class="karte" style="flex-direction:column;align-items:stretch"><div class="name">${ev.titel}</div><div class="info" style="font-size:15px">${ev.text}</div></div>
+    <button class="knopf gruen" data-act="wahl" data-i="${panelArg}" data-w="a">${ev.a.label}</button><button class="knopf gold" data-act="wahl" data-i="${panelArg}" data-w="b">${ev.b.label}</button>
+    <div class="info">Der zweite Weg ist oft riskanter, kann sich aber lohnen.</div>`;
+}
+function htmlErgebnis() {
+  const r = ergebnis; if (!r) return '<div class="leer">Nichts.</div>';
+  let h = `<div class="karte" style="flex-direction:column;align-items:stretch"><div class="info" style="font-size:15px">${r.text}</div>${r.geld ? `<div class="zeile"><span>Gefunden</span><span>+${fmt(r.geld)} €</span></div>` : ''}<div class="zeile"><span>Ruf</span><span>+${r.ruf}</span></div></div><h3>Mitgebrachte Samen</h3>`;
+  for (const e of r.samen) h += `<div class="karte">${pi(e.id, e.muts)}<div class="mitte"><div class="name">${esc(PLANTS[e.id].name)} × ${e.n} ${badge(PLANTS[e.id].rar)}</div><div class="klein">${mutChips(e.muts) || 'ohne Mutation'}</div></div></div>`;
+  return h + `<button class="knopf gruen" data-act="zu">Super</button>`;
 }
 function htmlBauen() {
   let h = '';
@@ -329,6 +376,10 @@ document.addEventListener('click', ev => {
     case 'allesverkaufen': { const r = L.alleVerkaufen(st, now); if (r.n) { ton('geld'); meldung(`${r.n} verkauft: +${fmt(r.summe)} €`); speichern(); } renderPanel(); break; }
     case 'feld': { const r = L.feldKaufen(st); if (!r.ok) meldung(r.grund, true); else { ton('bauen'); meldung('Neues Feld!'); speichern(); } renderPanel(); break; }
     case 'bauen': { const r = L.gebaeudeBauen(st, d.id); if (!r.ok) meldung(r.grund, true); else { ton('bauen'); meldung(BUILDINGS[d.id].name + ' ausgebaut!'); speichern(); } renderPanel(); break; }
+    case 'liefern': { const r = Au.liefern(st, +d.i, now); if (!r.ok) meldung(r.grund, true); else { ton('geld'); meldung(`+${fmt(r.lohn)} € und ${r.ruf} Ruf`); speichern(); } renderPanel(); break; }
+    case 'reise': { const r = Rz.reiseStarten(st, +d.g, +d.d, now); if (!r.ok) meldung(r.grund, true); else { ton('bauen'); meldung('Der Wagen ist unterwegs!'); speichern(); } renderPanel(); break; }
+    case 'reiseheim': panelArg = +d.i; panel = 'ereignis'; renderPanel(); break;
+    case 'wahl': { const r = Rz.reiseAbschliessen(st, +d.i, d.w, now); if (!r.ok) { meldung(r.grund, true); break; } ergebnis = r; ton('ernte'); speichern(); panel = 'ergebnis'; renderPanel(); break; }
     case 'filter': indexFilter = d.f; renderPanel(); break;
     case 'pflanze': panelArg = d.id; panel = 'pflanze'; renderPanel(); break;
     case 'giessen': L.giessen(st, +d.i); ton('giessen'); closePanel(); break;

@@ -138,6 +138,7 @@ export const BUILDINGS = {
   gewaechshaus: { name: 'Gewächshaus', kosten: [150, 800, 4000], text: ['Erste Reihe: keine Jahreszeiten-Nachteile', 'Zwei Reihen geschützt', 'Drei Reihen geschützt'] },
   scheune:      { name: 'Scheune', kosten: [50, 400, 2500], text: ['Lager für 80 Ernten', 'Lager für 150 Ernten', 'Lager für 300 Ernten'] },
   marktstand:   { name: 'Marktstand', kosten: [80, 500, 3000], text: ['Samen-Markt zeigt 5 Karten', '6 Karten', '7 Karten'] },
+  karawane:     { name: 'Wagenhaus', kosten: [150, 900], text: ['2 Reisen gleichzeitig', '3 Reisen gleichzeitig'] },
   kompost:      { name: 'Kompost', kosten: [40, 250, 1200], text: ['Entfernte Pflanzen: 40 % zurück, Erde erholt sich 2× schneller', '50 % zurück, 3× schneller', '60 % zurück, 4× schneller'] },
 };
 

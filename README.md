@@ -22,3 +22,8 @@ Läuft ohne Build-Schritt (statische Dateien, ES-Module). Lokal: `python3 -m htt
 - Erde wird bei jedem Anbau müde und erholt sich auf leeren Feldern. Gleiche Pflanzenfamilie hintereinander kostet extra Fruchtbarkeit, Wechsel gibt Fruchtfolge-Bonus.
 - Der Samen-Markt wechselt zur vollen Stunde und ist für alle Spieler gleich. Händler-Ruf schaltet seltenere Samen frei.
 - Spielstand liegt im Browser (localStorage), im Hub mit Spielstand-Code.
+
+## Aufbruch und Aufträge (Stufe 2)
+
+- **Aufbruch:** Wagen schicken Reisen in 7 Gebiete (Waldrand bis Himmelsinsel, Gebiete schaltet der Ruf frei). Dauer Kurz/Mittel/Lang gegen Proviantkosten. Zurück kommen Samen (auch seltene, die der Markt nicht verkauft, teils mit Mutation) und ein Ereignis mit zwei Wegen. Die Himmelsinsel kann sehr selten geheime Pflanzen bringen. Das Wagenhaus erlaubt mehrere Reisen gleichzeitig.
+- **Aufträge:** Das Dorf bestellt Ernte (teils mit Mutation) gegen mehr Geld als beim Verkauf plus Ruf; drei Bestellungen, 3 Std gültig.
