@@ -1,0 +1,6 @@
+{
+  "name": "erntezeitaufbruch",
+  "compatibility_date": "2026-04-02",
+  "observability": { "enabled": true },
+  "assets": { "directory": "." }
+}

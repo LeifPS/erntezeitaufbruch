@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<script src="lgh-vorlade.js"></script><!--lgh-->
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f3e9cf">
+<title>Erntezeit: Aufbruch</title>
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="kopf">
+    <div class="pille" id="p-geld" title="Geld"><span class="muenze"></span><b id="v-geld">0</b></div>
+    <button class="pille" id="p-ruf" data-act="ruf" title="Händler-Ruf"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 17l-6.1 3.4 1.5-6.8L2.2 9l6.9-.7z" fill="#f2b81e" stroke="#2b2418" stroke-width="1.6" stroke-linejoin="round"/></svg><b id="v-ruf">0</b></button>
+    <div class="pille" id="p-wetter"><span id="v-wetter">–</span></div>
+    <button class="pille klein" id="b-einst" data-act="einst" aria-label="Einstellungen"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zm8.2 4.5l1.6 1.3-1.8 3.1-2-.7a7.6 7.6 0 01-1.7 1l-.4 2.1h-3.6l-.4-2.1a7.6 7.6 0 01-1.7-1l-2 .7-1.8-3.1L7.9 13a7.6 7.6 0 010-2L6.3 9.7l1.8-3.1 2 .7a7.6 7.6 0 011.7-1L12.2 4.2h3.6l.4 2.1a7.6 7.6 0 011.7 1l2-.7 1.8 3.1L20.2 11a7.6 7.6 0 010 2z" transform="translate(-2.5 -.3) scale(.95)" fill="#fff" stroke="#2b2418" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+  </header>
+  <main id="hofwrap"><canvas id="hof"></canvas><div id="toast" role="status"></div></main>
+  <section id="leiste">
+    <div id="auswahl"></div>
+    <div id="hinweis"></div>
+    <div id="schnell">
+      <button class="knopf gruen" data-act="alleernten">Alles ernten</button>
+      <button class="knopf blau" data-act="allegiessen">Alles gießen</button>
+    </div>
+  </section>
+  <nav id="dock">
+    <button data-panel="markt"><svg viewBox="0 0 24 24"><path d="M3 9l2-5h14l2 5v2a3 3 0 01-6 0 3 3 0 01-6 0 3 3 0 01-6 0zM5 14v6h14v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Markt</button>
+    <button data-panel="lager"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v10l-8 4-8-4zM4 8l8 4 8-4M12 12v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Lager<i id="n-lager"></i></button>
+    <button data-panel="bauen"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Bauen</button>
+    <button data-panel="index"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3zM5 17a3 3 0 013-3h11" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Index</button>
+  </nav>
+</div>
+<div id="blatt" hidden>
+  <div id="blatt-box" role="dialog" aria-modal="true">
+    <div id="blatt-kopf"><h2 id="blatt-titel"></h2><button id="blatt-zu" data-act="zu" aria-label="Schließen">✕</button></div>
+    <div id="blatt-inhalt"></div>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+<!--lgh-start--><script>window.LGH_SPIEL='erntezeitaufbruch';window.LGH_POS='bc';window.LGH_EIGENER_KNOPF=true;</script><script src="lgh-modul.js"></script><!--lgh-ende-->
+</body>
+</html>

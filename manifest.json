@@ -1,0 +1,9 @@
+{
+  "name": "Erntezeit: Aufbruch",
+  "short_name": "Erntezeit",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3e9cf",
+  "theme_color": "#f3e9cf",
+  "icons": [{ "src": "icons/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
