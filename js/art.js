@@ -19,13 +19,33 @@ export function mix(a, b, t) {
 const rainbow = (i, tms = 0) => `hsl(${(i * 55 + tms / 25) % 360},85%,62%)`;
 const col = (c, i = 0, tms = 0) => c === 'rainbow' ? rainbow(i, tms) : c;
 
-function fs(ctx, fill, lw = 2) { ctx.fillStyle = fill; ctx.fill(); if (lw) { ctx.lineWidth = lw; ctx.stroke(); } }
+// Licht von oben: Verlauf wird einmal gebaut und für alle Formen wiederverwendet
+let GRAD = null;
+function lichtVerlauf() {
+  if (GRAD) return GRAD;
+  const c = (typeof document !== 'undefined') ? document.createElement('canvas').getContext('2d') : null; if (!c) return null;
+  GRAD = c.createLinearGradient(0, -80, 0, 4);
+  GRAD.addColorStop(0, 'rgba(255,255,255,.30)'); GRAD.addColorStop(0.5, 'rgba(255,255,255,0)'); GRAD.addColorStop(1, 'rgba(10,0,40,.24)');
+  return GRAD;
+}
+function fs(ctx, fill, lw = 2, flach = false) {
+  ctx.fillStyle = fill; ctx.fill();
+  if (!flach && typeof fill === 'string' && fill[0] === '#') { const g = lichtVerlauf(); if (g) { ctx.save(); ctx.clip(); ctx.fillStyle = g; ctx.fillRect(-140, -150, 280, 170); ctx.restore(); } }
+  if (lw) { ctx.lineWidth = lw; ctx.stroke(); }
+}
+function gloss(ctx, x, y, r, a = 0.6) { ctx.save(); ctx.fillStyle = 'rgba(255,255,255,' + a + ')'; ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.3, r), Math.max(0.3, r * 0.6), -0.6, 0, TAU); ctx.fill(); ctx.restore(); }
+function dots(ctx, pts, r, fill) { ctx.fillStyle = fill; for (const [x, y] of pts) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); } }
 function ell(ctx, x, y, rx, ry, fill, rot = 0, lw = 2) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, TAU); fs(ctx, fill, lw); }
 function circ(ctx, x, y, r, fill, lw = 2) { ctx.beginPath(); ctx.arc(x, y, Math.max(0.1, r), 0, TAU); fs(ctx, fill, lw); }
 function leaf(ctx, x, y, ang, len, wid, fill, vein) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  if (vein === undefined && typeof fill === 'string' && fill[0] === '#') vein = shade(fill, -0.28);
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(len * 0.5, -wid, len, 0); ctx.quadraticCurveTo(len * 0.5, wid, 0, 0); fs(ctx, fill, 1.8);
-  if (vein) { ctx.beginPath(); ctx.moveTo(len * 0.1, 0); ctx.lineTo(len * 0.85, 0); ctx.strokeStyle = vein; ctx.lineWidth = 1; ctx.stroke(); ctx.strokeStyle = OUT; }
+  if (vein) {
+    ctx.strokeStyle = vein; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(len * 0.08, 0); ctx.lineTo(len * 0.88, 0);
+    if (len > 14) for (const t of [0.3, 0.52, 0.72]) { const w = wid * 0.5 * (1 - Math.abs(t - 0.45)); ctx.moveTo(len * t, 0); ctx.lineTo(len * (t + 0.13), -w); ctx.moveTo(len * t, 0); ctx.lineTo(len * (t + 0.13), w); }
+    ctx.stroke(); ctx.strokeStyle = OUT;
+  }
   ctx.restore();
 }
 function stem(ctx, x0, y0, x1, y1, cx, cy, c, w = 4) {
@@ -37,21 +57,60 @@ function star(ctx, x, y, r, fill) {
   ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, rr = i % 2 ? r * 0.35 : r; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
 }
 
+
+// Eine einzelne Frucht/Beere je Sorte (x,y = Mitte, r = Größe)
+function frucht(ctx, id, x, y, r, c) {
+  const st = ctx.strokeStyle;
+  const stiel = (dx = 0, dy = -r, c2 = '#5a7a2e') => { ctx.beginPath(); ctx.moveTo(x, y + dy * 0.7); ctx.lineTo(x + dx, y + dy - 3); ctx.lineWidth = 2; ctx.strokeStyle = c2; ctx.stroke(); ctx.strokeStyle = OUT; ctx.lineWidth = 1.6; };
+  const kelch = (cc = '#4f9a3a') => { for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i - 2) * 0.7; leaf(ctx, x, y - r * 0.75, a, r * 0.8, r * 0.3, cc, null); } };
+  ctx.lineWidth = 1.6;
+  switch (id) {
+    case 'tomate': circ(ctx, x, y, r * 1.1, c, 1.6); kelch(); gloss(ctx, x - r * 0.4, y - r * 0.3, r * 0.35); break;
+    case 'paprika': ell(ctx, x, y, r * 0.95, r * 1.25, c, 0, 1.6); stiel(0, -r * 1.2, '#4f8a3a'); gloss(ctx, x - r * 0.35, y - r * 0.3, r * 0.3); break;
+    case 'erdbeere': { ctx.beginPath(); ctx.moveTo(x - r, y - r * 0.5); ctx.quadraticCurveTo(x, y - r * 1.2, x + r, y - r * 0.5); ctx.quadraticCurveTo(x + r * 0.7, y + r * 0.8, x, y + r * 1.2); ctx.quadraticCurveTo(x - r * 0.7, y + r * 0.8, x - r, y - r * 0.5); fs(ctx, c, 1.6); dots(ctx, [[-0.4, -0.2], [0.35, -0.3], [0, 0.2], [-0.25, 0.55], [0.3, 0.45]].map(([a, b]) => [x + a * r, y + b * r]), r * 0.13, '#ffe27a'); kelch(); break; }
+    case 'blaubeere': case 'aubergine': case 'himmelstraube': circ(ctx, x, y, r, c, 1.5); ctx.beginPath(); for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; ctx.lineTo(x + Math.cos(a) * r * 0.35, y - r * 0.55 + Math.sin(a) * r * 0.25); } ctx.closePath(); ctx.fillStyle = shade(c, -0.4); ctx.fill(); gloss(ctx, x - r * 0.4, y - r * 0.2, r * 0.3, 0.45); break;
+    case 'apfel': circ(ctx, x, y, r * 1.05, c, 1.6); ctx.beginPath(); ctx.arc(x, y - r * 0.9, r * 0.28, 0, Math.PI); ctx.fillStyle = shade(c, -0.35); ctx.fill(); stiel(1, -r * 1.1, '#6a4a2a'); leaf(ctx, x + 1, y - r * 1.1, -0.5, r * 0.9, r * 0.35, '#5aa845'); gloss(ctx, x - r * 0.45, y - r * 0.25, r * 0.32); break;
+    case 'birne': { ctx.beginPath(); ctx.moveTo(x, y - r * 1.3); ctx.bezierCurveTo(x + r * 0.5, y - r * 1.1, x + r * 0.5, y - r * 0.2, x + r * 1.0, y + r * 0.4); ctx.bezierCurveTo(x + r * 1.0, y + r * 1.2, x - r * 1.0, y + r * 1.2, x - r * 1.0, y + r * 0.4); ctx.bezierCurveTo(x - r * 0.5, y - r * 0.2, x - r * 0.5, y - r * 1.1, x, y - r * 1.3); fs(ctx, c, 1.6); stiel(1, -r * 1.3, '#6a4a2a'); gloss(ctx, x - r * 0.45, y + r * 0.2, r * 0.3); break; }
+    case 'zitrone': { ctx.beginPath(); ctx.moveTo(x - r * 1.35, y); ctx.quadraticCurveTo(x - r * 1.0, y - r * 1.0, x, y - r * 1.0); ctx.quadraticCurveTo(x + r * 1.0, y - r * 1.0, x + r * 1.35, y); ctx.quadraticCurveTo(x + r * 1.0, y + r * 1.0, x, y + r * 1.0); ctx.quadraticCurveTo(x - r * 1.0, y + r * 1.0, x - r * 1.35, y); fs(ctx, c, 1.6); gloss(ctx, x - r * 0.3, y - r * 0.35, r * 0.35); break; }
+    case 'orange': circ(ctx, x, y, r * 1.1, c, 1.6); dots(ctx, [[-0.4, -0.2], [0.3, 0.3], [0.1, -0.5], [-0.2, 0.5], [0.5, -0.15]].map(([a, b]) => [x + a * r, y + b * r]), 0.7, shade(c, -0.3)); circ(ctx, x, y - r * 0.95, 1.8, '#4f9a3a', 1); gloss(ctx, x - r * 0.4, y - r * 0.3, r * 0.3); break;
+    case 'kirsche': { ctx.beginPath(); ctx.moveTo(x - r * 0.9, y + r * 0.2); ctx.quadraticCurveTo(x - r * 0.3, y - r * 1.6, x, y - r * 1.9); ctx.moveTo(x + r * 0.9, y + r * 0.2); ctx.quadraticCurveTo(x + r * 0.3, y - r * 1.6, x, y - r * 1.9); ctx.lineWidth = 1.6; ctx.strokeStyle = '#5a7a2e'; ctx.stroke(); ctx.strokeStyle = OUT; circ(ctx, x - r * 0.9, y + r * 0.4, r * 0.8, c, 1.5); circ(ctx, x + r * 0.9, y + r * 0.4, r * 0.8, shade(c, -0.1), 1.5); gloss(ctx, x - r * 1.15, y + r * 0.15, r * 0.25); gloss(ctx, x + r * 0.65, y + r * 0.15, r * 0.25); break; }
+    case 'olive': ell(ctx, x, y, r * 0.7, r * 1.0, c, 0.3, 1.5); gloss(ctx, x - r * 0.15, y - r * 0.3, r * 0.2, 0.4); break;
+    case 'avocado': { ctx.beginPath(); ctx.moveTo(x, y - r * 1.25); ctx.bezierCurveTo(x + r * 0.55, y - r * 1.1, x + r * 0.45, y - r * 0.2, x + r * 0.95, y + r * 0.4); ctx.bezierCurveTo(x + r * 0.95, y + r * 1.15, x - r * 0.95, y + r * 1.15, x - r * 0.95, y + r * 0.4); ctx.bezierCurveTo(x - r * 0.45, y - r * 0.2, x - r * 0.55, y - r * 1.1, x, y - r * 1.25); fs(ctx, c, 1.6); gloss(ctx, x - r * 0.4, y + r * 0.1, r * 0.3, 0.35); break; }
+    case 'pfirsich': circ(ctx, x, y, r * 1.05, c, 1.6); ctx.beginPath(); ctx.moveTo(x, y - r * 0.9); ctx.quadraticCurveTo(x + r * 0.5, y, x, y + r * 0.9); ctx.lineWidth = 1.2; ctx.strokeStyle = shade(c, -0.35); ctx.stroke(); ctx.strokeStyle = OUT; leaf(ctx, x, y - r, -0.6, r * 0.9, r * 0.32, '#5aa845'); gloss(ctx, x - r * 0.5, y - r * 0.2, r * 0.3, 0.5); break;
+    case 'mango': ell(ctx, x, y, r * 0.85, r * 1.2, c, 0.6, 1.6); gloss(ctx, x - r * 0.3, y - r * 0.4, r * 0.3, 0.5); break;
+    case 'kastanie': circ(ctx, x, y, r * 0.9, shade(c, 0.1), 1.6); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r * 0.8, y + Math.sin(a) * r * 0.8); ctx.lineTo(x + Math.cos(a) * r * 1.25, y + Math.sin(a) * r * 1.25); ctx.lineWidth = 1.5; ctx.stroke(); } break;
+    default: circ(ctx, x, y, r, c, 1.6); gloss(ctx, x - r * 0.35, y - r * 0.3, r * 0.3, 0.5);
+  }
+  ctx.strokeStyle = st; ctx.lineWidth = 2;
+}
+
 // ── Archetypen. Koordinaten: Ursprung = Fuß der Pflanze, nach oben negativ, Höhe ca. 90 ──
 // k = Wuchs (0.3–1), fr = Reife der Frucht (0–1), sw = Schwanken, r = Zufall (0–1) je Feld
 const A = {
   wurzel(ctx, p, k, fr, sw, r) {
-    const n = 5;
-    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (i - 2) * 0.42 + sw; leaf(ctx, 0, -6, a, (38 + (i % 2) * 8) * k, 7 * k, p.c2, shade(p.c2, -0.3)); }
+    const id = p.id, n = 6;
+    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (i - 2.5) * 0.4 + sw; leaf(ctx, 0, -6, a, (36 + (i % 2) * 9) * k, 6.5 * k, shade(p.c2, i % 2 ? -0.1 : 0.06)); }
     if (fr > 0) {
       const s = 0.4 + 0.6 * fr;
-      if (p.id === 'karotte') { ctx.beginPath(); ctx.moveTo(-9 * s, -8); ctx.quadraticCurveTo(0, -17 * s, 9 * s, -8); ctx.lineTo(1, 6 * s); ctx.lineTo(-1, 6 * s); ctx.closePath(); fs(ctx, p.c1); }
-      else if (p.id === 'ingwer') { ell(ctx, -6, -6, 11 * s, 6 * s, p.c1, -0.3); ell(ctx, 7, -8, 9 * s, 5 * s, shade(p.c1, 0.1), 0.4); }
+      if (id === 'karotte') {
+        ctx.beginPath(); ctx.moveTo(-10 * s, -9); ctx.quadraticCurveTo(0, -19 * s, 10 * s, -9); ctx.lineTo(1.5, 10 * s); ctx.lineTo(-1.5, 10 * s); ctx.closePath(); fs(ctx, p.c1);
+        ctx.beginPath(); for (const [y, w] of [[-4, 6], [1, 4], [6, 2.5]]) { ctx.moveTo(-w * s, y * s); ctx.lineTo(-w * s * 0.2, (y + 1.5) * s); } ctx.lineWidth = 1.2; ctx.strokeStyle = shade(p.c1, -0.3); ctx.stroke(); ctx.strokeStyle = OUT; ctx.lineWidth = 2;
+      } else if (id === 'ingwer') { ell(ctx, -6, -6, 11 * s, 6 * s, p.c1, -0.3); ell(ctx, 7, -8, 9 * s, 5 * s, shade(p.c1, 0.1), 0.4); ell(ctx, 0, -3, 8 * s, 4 * s, shade(p.c1, -0.06), 0.1); }
+      else if (id === 'kartoffel') { ctx.beginPath(); ctx.ellipse(0, -4, 14 * s, 10 * s, -0.15, 0, TAU); fs(ctx, p.c1); dots(ctx, [[-5, -6], [4, -2], [-2, 1], [7, -7]].map(([x, y]) => [x * s, y * s]), 1.1 * s + 0.3, shade(p.c1, -0.4)); gloss(ctx, -5 * s, -8 * s, 3 * s, 0.4); }
+      else if (id === 'ruebe') {
+        ctx.beginPath(); ctx.moveTo(-2, 9 * s); ctx.lineTo(0, 16 * s); ctx.lineTo(2, 9 * s); ctx.lineWidth = 2; ctx.stroke();
+        ell(ctx, 0, -5, 13 * s, 11 * s, '#f0e6d8'); ctx.save(); ctx.beginPath(); ctx.ellipse(0, -5, 13 * s, 11 * s, 0, 0, TAU); ctx.clip(); ctx.fillStyle = p.c1; ctx.fillRect(-16 * s, -18 * s, 32 * s, 10 * s); ctx.restore(); ell(ctx, 0, -5, 13 * s, 11 * s, 'rgba(0,0,0,0)'); gloss(ctx, -5 * s, -10 * s, 3 * s);
+      }
+      else if (id === 'zwiebel' || id === 'knoblauch') {
+        ctx.beginPath(); ctx.moveTo(0, -20 * s); ctx.quadraticCurveTo(-3 * s, -14 * s, -13 * s, -6); ctx.quadraticCurveTo(-13 * s, 6 * s, 0, 6 * s); ctx.quadraticCurveTo(13 * s, 6 * s, 13 * s, -6); ctx.quadraticCurveTo(3 * s, -14 * s, 0, -20 * s); fs(ctx, p.c1);
+        ctx.beginPath(); for (const x of [-7, -2.5, 2.5, 7]) { ctx.moveTo(x * s * 0.5, -14 * s); ctx.quadraticCurveTo(x * s * 1.4, -4, x * s * 0.9, 5 * s); } ctx.lineWidth = 1.1; ctx.strokeStyle = shade(p.c1, -0.3); ctx.stroke(); ctx.strokeStyle = OUT; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-2, 6 * s); ctx.lineTo(-3, 10 * s); ctx.moveTo(0, 6 * s); ctx.lineTo(0, 11 * s); ctx.moveTo(2, 6 * s); ctx.lineTo(3, 10 * s); ctx.lineWidth = 1; ctx.stroke(); ctx.lineWidth = 2;
+      }
+      else if (id === 'suesskartoffel') { ctx.beginPath(); ctx.ellipse(1, -5, 16 * s, 8 * s, -0.25, 0, TAU); fs(ctx, p.c1); gloss(ctx, -6 * s, -9 * s, 3 * s, 0.4); dots(ctx, [[4, -3], [9, -6]].map(([x, y]) => [x * s, y * s]), 1, shade(p.c1, -0.4)); }
       else {
-        ell(ctx, 0, -4, 13 * s, 10 * s, p.c1);
-        ctx.beginPath(); ctx.arc(-4 * s, -8 * s, 3 * s, 3.4, 4.6); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.stroke(); ctx.strokeStyle = OUT;
-        if (p.id === 'mandragora') { circ(ctx, -4, -5, 1.6, OUT, 0); circ(ctx, 4, -5, 1.6, OUT, 0); ctx.beginPath(); ctx.arc(0, -1, 3, 0.2, Math.PI - 0.2); ctx.lineWidth = 1.5; ctx.stroke(); }
-        if (p.id === 'aetherwurzel') { circ(ctx, 0, -4, 6 * s, 'rgba(255,255,255,.5)', 0); }
+        ell(ctx, 0, -4, 13 * s, 10 * s, p.c1); gloss(ctx, -5 * s, -9 * s, 3 * s);
+        if (id === 'mandragora') { circ(ctx, -4, -5, 1.6, OUT, 0); circ(ctx, 4, -5, 1.6, OUT, 0); ctx.beginPath(); ctx.arc(0, -1, 3, 0.2, Math.PI - 0.2); ctx.lineWidth = 1.5; ctx.stroke(); ctx.beginPath(); ctx.moveTo(-6, 5); ctx.quadraticCurveTo(-10, 10, -6, 13); ctx.moveTo(6, 5); ctx.quadraticCurveTo(10, 10, 6, 13); ctx.stroke(); }
+        if (id === 'aetherwurzel') { circ(ctx, 0, -4, 6 * s, 'rgba(255,255,255,.5)', 0); }
       }
     }
   },
@@ -69,27 +128,44 @@ const A = {
     if (fr > 0.5 && (p.id === 'glanzkraut' || p.id === 'schattenblatt' || p.id === 'geisterkraut')) { star(ctx, -12, -34 * k, 5, p.id === 'schattenblatt' ? '#d8b0ff' : '#fff6b0'); star(ctx, 14, -26 * k, 4, '#ffffff'); }
   },
   ranke(ctx, p, k, fr, sw, r) {
-    stem(ctx, -34 * k, -6, 0, -8, -16 * k, -22 * k, p.c2, 3);
-    stem(ctx, 0, -8, 34 * k, -6, 18 * k, -20 * k, p.c2, 3);
-    leaf(ctx, -18 * k, -14, -2.4, 18 * k, 8 * k, p.c2); leaf(ctx, 20 * k, -14, -0.8, 18 * k, 8 * k, p.c2); leaf(ctx, 0, -10, -Math.PI / 2, 22 * k, 8 * k, shade(p.c2, 0.1));
+    const id = p.id;
+    stem(ctx, -36 * k, -6, 0, -8, -16 * k, -24 * k, p.c2, 3);
+    stem(ctx, 0, -8, 36 * k, -6, 18 * k, -22 * k, p.c2, 3);
+    ctx.beginPath(); ctx.arc(-30 * k, -16 * k, 5, 0.5, 4.8); ctx.moveTo(30 * k + 5, -14 * k); ctx.arc(30 * k, -14 * k, 5, 3.6, 8.6); ctx.lineWidth = 1.4; ctx.strokeStyle = p.c2; ctx.stroke(); ctx.strokeStyle = OUT; ctx.lineWidth = 2;
+    for (const [x, y, a, l] of [[-20, -14, -2.5, 20], [22, -14, -0.7, 20], [0, -10, -Math.PI / 2, 24], [-8, -12, -2.0, 16], [10, -12, -1.1, 16]]) leaf(ctx, x * k, y, a, l * k, 9 * k, shade(p.c2, 0.04));
     if (fr > 0) {
-      const s = 0.35 + 0.65 * fr, id = p.id;
-      if (id === 'gurke' || id === 'bohnen' || id === 'erbsenschote') { ell(ctx, 0, -9, 20 * s, 6.5 * s, p.c1, id === 'gurke' ? 0.15 : -0.1); }
-      else if (id === 'wassermelone') { ell(ctx, 0, -14 * s, 24 * s, 16 * s, p.c1); for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.ellipse(i * 8 * s, -14 * s, 3 * s, 15 * s, 0, 0, TAU); ctx.strokeStyle = shade(p.c1, -0.35); ctx.lineWidth = 2; ctx.stroke(); } ctx.strokeStyle = OUT; ell(ctx, 0, -14 * s, 24 * s, 16 * s, 'rgba(0,0,0,0)'); }
-      else if (id === 'kuerbis' || id === 'sternenkuerbis') { ell(ctx, -9 * s, -13 * s, 12 * s, 14 * s, shade(p.c1, -0.08)); ell(ctx, 9 * s, -13 * s, 12 * s, 14 * s, shade(p.c1, -0.08)); ell(ctx, 0, -14 * s, 14 * s, 16 * s, p.c1); stem(ctx, 0, -28 * s, 3, -34 * s, 0, -31 * s, '#6a8a3a', 4); if (id === 'sternenkuerbis') star(ctx, 0, -14 * s, 9 * s, '#fff2a0'); }
-      else { ell(ctx, 0, -13 * s, 19 * s, 14 * s, p.c1); ctx.beginPath(); ctx.arc(-6 * s, -18 * s, 6 * s, 3.5, 4.7); ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.stroke(); ctx.strokeStyle = OUT; }
+      const s = 0.35 + 0.65 * fr;
+      if (id === 'gurke') { ell(ctx, 0, -9, 21 * s, 6.5 * s, p.c1, 0.12); dots(ctx, [[-10, -11], [-3, -7], [4, -11], [11, -8]].map(([x, y]) => [x * s, y * s - 1]), 0.9, shade(p.c1, -0.4)); gloss(ctx, -8 * s, -12 * s, 5 * s, 0.4); }
+      else if (id === 'bohnen' || id === 'erbsenschote') {
+        for (const [dx, rot] of id === 'bohnen' ? [[-12, 0.5], [0, 0.1], [12, -0.4]] : [[-6, 0.15], [8, -0.1]]) {
+          ctx.save(); ctx.translate(dx * s, -9 - Math.abs(dx) * 0.2); ctx.rotate(rot); ell(ctx, 0, 0, 15 * s, 4.6 * s, p.c1, 0, 1.6);
+          if (id === 'erbsenschote') dots(ctx, [[-8, 0], [-3, 0], [2, 0], [7, 0]].map(([x, y]) => [x * s, y]), 2 * s, shade(p.c1, 0.2)); gloss(ctx, -5 * s, -2 * s, 4 * s, 0.4); ctx.restore();
+        }
+      }
+      else if (id === 'wassermelone') { ell(ctx, 0, -14 * s, 25 * s, 16 * s, p.c1); ctx.save(); ctx.beginPath(); ctx.ellipse(0, -14 * s, 25 * s, 16 * s, 0, 0, TAU); ctx.clip(); ctx.strokeStyle = shade(p.c1, -0.4); ctx.lineWidth = 3.2 * s; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(i * 9 * s, -32 * s); ctx.quadraticCurveTo(i * 12 * s, -14 * s, i * 9 * s, 4); ctx.stroke(); } ctx.restore(); ctx.strokeStyle = OUT; ell(ctx, 0, -14 * s, 25 * s, 16 * s, 'rgba(0,0,0,0)'); gloss(ctx, -10 * s, -22 * s, 6 * s, 0.4); stem(ctx, 0, -29 * s, 2, -34 * s, 0, -32 * s, '#6a8a3a', 3); }
+      else if (id === 'melone') { ell(ctx, 0, -14 * s, 21 * s, 17 * s, p.c1); ctx.save(); ctx.beginPath(); ctx.ellipse(0, -14 * s, 21 * s, 17 * s, 0, 0, TAU); ctx.clip(); ctx.strokeStyle = shade(p.c1, -0.25); ctx.lineWidth = 1; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(i * 7 * s, -32 * s); ctx.lineTo(i * 7 * s + 6 * s, 4); ctx.moveTo(i * 7 * s + 12 * s, -32 * s); ctx.lineTo(i * 7 * s - 4 * s, 4); ctx.stroke(); } ctx.restore(); ctx.strokeStyle = OUT; ell(ctx, 0, -14 * s, 21 * s, 17 * s, 'rgba(0,0,0,0)'); gloss(ctx, -8 * s, -22 * s, 5 * s, 0.4); stem(ctx, 0, -30 * s, 2, -35 * s, 0, -33 * s, '#6a8a3a', 3); }
+      else if (id === 'kuerbis' || id === 'sternenkuerbis') {
+        ell(ctx, -10 * s, -13 * s, 11 * s, 14 * s, shade(p.c1, -0.12)); ell(ctx, 10 * s, -13 * s, 11 * s, 14 * s, shade(p.c1, -0.12)); ell(ctx, 0, -14 * s, 13 * s, 16 * s, p.c1);
+        ctx.beginPath(); for (const x of [-6, 0, 6]) { ctx.moveTo(x * s, -29 * s); ctx.quadraticCurveTo(x * s * 1.4, -14 * s, x * s, 1); } ctx.lineWidth = 1.2; ctx.strokeStyle = shade(p.c1, -0.3); ctx.stroke(); ctx.strokeStyle = OUT; ctx.lineWidth = 2;
+        stem(ctx, 0, -28 * s, 3, -35 * s, 0, -32 * s, '#6a8a3a', 4); gloss(ctx, -6 * s, -22 * s, 4 * s, 0.4);
+        if (id === 'sternenkuerbis') star(ctx, 0, -14 * s, 9 * s, '#fff2a0');
+      }
+      else { ell(ctx, 0, -13 * s, 19 * s, 14 * s, p.c1); gloss(ctx, -7 * s, -19 * s, 6 * s, 0.5); }
     }
   },
   busch(ctx, p, k, fr, sw, r) {
-    const g = p.c2;
-    circ(ctx, -14 * k, -18 * k, 16 * k, shade(g, -0.1)); circ(ctx, 14 * k, -18 * k, 16 * k, shade(g, -0.1)); circ(ctx, 0, -28 * k, 19 * k, g);
+    const g = p.c2, id = p.id;
+    for (const [x, y, rr, sh] of [[-18, -14, 13, -0.14], [18, -14, 13, -0.14], [-9, -22, 15, -0.06], [10, -24, 15, -0.06], [0, -31, 16, 0.04]]) circ(ctx, x * k, y * k, rr * k, shade(g, sh), 1.8);
+    for (let i = 0; i < 7; i++) leaf(ctx, (i - 3) * 8 * k, -18 * k - (i % 3) * 7 * k, -Math.PI / 2 + (i - 3) * 0.55, 13 * k, 4, shade(g, 0.12));
+    if (id === 'erdbeere' && fr < 0.6) for (let i = 0; i < 3; i++) { const fx = (i - 1) * 14 * k, fy = -30 * k - (i % 2) * 6; for (let j = 0; j < 5; j++) leaf(ctx, fx, fy, j / 5 * TAU, 5, 2.4, '#fffdf0', null); circ(ctx, fx, fy, 1.8, '#f2c43a', 0.8); }
     if (fr > 0) {
-      const pts = [[-14, -20], [8, -22], [-2, -34], [16, -12], [-20, -10], [4, -10], [-8, -26], [12, -34]];
-      const n = Math.ceil(pts.length * fr), big = p.id === 'himmelstraube';
+      const pts = [[-16, -16], [8, -20], [-4, -32], [18, -10], [-22, -8], [4, -8], [-10, -24], [14, -30], [-2, -18]];
+      const n = Math.ceil(pts.length * fr), big = id === 'himmelstraube';
+      const rr = ({ tomate: 6.4, paprika: 5.6, erdbeere: 5.2, blaubeere: 4.4, aubergine: 5.2, himmelstraube: 3.2 })[id] || 5;
       for (let i = 0; i < n; i++) {
-        const [x, y] = pts[i];
-        if (big) { for (let j = 0; j < 3; j++) circ(ctx, x * k + (j - 1) * 4, y * k + (j % 2) * 4, 4.2, p.c1, 1.5); }
-        else circ(ctx, x * k, y * k, 5.2 * (0.5 + 0.5 * fr), p.c1, 1.6);
+        const [x, y] = pts[i], gr = rr * (0.5 + 0.5 * fr);
+        if (big) { for (const [dx, dy] of [[-3, -2], [3, -2], [0, 3]]) frucht(ctx, id, x * k + dx, y * k + dy, gr, p.c1); }
+        else frucht(ctx, id, x * k, y * k, gr, p.c1);
       }
     }
   },
@@ -98,35 +174,48 @@ const A = {
     if (p.id === 'kokosnuss') {
       stem(ctx, 0, 0, 4 * sw * 30, -52 * k, -6, -26 * k, tr, 7);
       const tx = 4 * sw * 30, ty = -52 * k;
-      for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + (i - 2.5) * 0.62; leaf(ctx, tx, ty, a, 38 * k, 6, p.c2); }
-      if (fr > 0) { circ(ctx, tx - 5, ty + 5, 5 * fr + 1, p.c1); circ(ctx, tx + 5, ty + 6, 5 * fr + 1, p.c1); }
+      for (let j = 1; j < 5; j++) { const t = j / 5; ctx.beginPath(); ctx.moveTo(-4 + tx * t * t, -52 * k * t - 2); ctx.lineTo(4 + tx * t * t, -52 * k * t - 2); ctx.lineWidth = 1.2; ctx.strokeStyle = shade(tr, -0.35); ctx.stroke(); }
+      ctx.strokeStyle = OUT;
+      for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i - 3) * 0.55; leaf(ctx, tx, ty, a, (36 + (i % 2) * 6) * k, 6, shade(p.c2, i % 2 ? 0 : 0.1)); }
+      if (fr > 0) { circ(ctx, tx - 5, ty + 6, 5 * fr + 1.5, p.c1); circ(ctx, tx + 5, ty + 7, 5 * fr + 1.5, p.c1); circ(ctx, tx, ty + 9, 5 * fr + 1.5, shade(p.c1, 0.1)); }
       return;
     }
-    ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-4, -30 * k * K); ctx.lineTo(4, -30 * k * K); ctx.lineTo(6, 0); ctx.closePath(); fs(ctx, tr);
-    const cy = -42 * k * K;
-    if (big) { const gl = ctx.createRadialGradient(0, cy, 4, 0, cy, 48 * k); gl.addColorStop(0, 'rgba(255,230,120,.55)'); gl.addColorStop(1, 'rgba(255,230,120,0)'); ctx.fillStyle = gl; ctx.fillRect(-60, cy - 60, 120, 120); }
-    circ(ctx, -16 * k * K, cy + 6, 16 * k * K, shade(p.c2, -0.1)); circ(ctx, 16 * k * K, cy + 6, 16 * k * K, shade(p.c2, -0.1)); circ(ctx, 0, cy - 6 * k, 20 * k * K, p.c2);
+    const th = 32 * k * K, cy = -44 * k * K;
+    // Stamm mit Ästen und Rinde
+    ctx.beginPath(); ctx.moveTo(-8, 0); ctx.quadraticCurveTo(-5, -th * 0.5, -4, -th); ctx.lineTo(4, -th); ctx.quadraticCurveTo(5, -th * 0.5, 8, 0); ctx.closePath(); fs(ctx, tr);
+    stem(ctx, 0, -th * 0.7, -15 * k, cy + 6, -6, -th * 0.9, tr, 4); stem(ctx, 0, -th * 0.65, 15 * k, cy + 8, 6, -th * 0.85, tr, 4);
+    ctx.beginPath(); for (const [a, b] of [[-3, -6], [2, -14], [-2, -22], [3, -26]]) { ctx.moveTo(a - 1.5, b); ctx.lineTo(a + 1.5, b - 4); } ctx.lineWidth = 1.2; ctx.strokeStyle = shade(tr, -0.4); ctx.stroke(); ctx.strokeStyle = OUT; ctx.lineWidth = 2;
+    if (big) { const gl = ctx.createRadialGradient(0, cy, 4, 0, cy, 56 * k); gl.addColorStop(0, 'rgba(255,230,120,.55)'); gl.addColorStop(1, 'rgba(255,230,120,0)'); ctx.fillStyle = gl; ctx.fillRect(-70, cy - 70, 140, 140); }
+    const kr = k * K;
+    // Krone aus mehreren Lappen, hinten dunkel, vorn hell
+    for (const [x, y, rr, sh] of [[-22, 8, 14, -0.18], [22, 8, 14, -0.18], [-14, -2, 17, -0.1], [15, -1, 17, -0.1], [0, -12, 20, 0], [-8, 12, 13, -0.12], [10, 13, 13, -0.12]]) circ(ctx, x * kr, cy + y * k, rr * kr, shade(p.c2, sh), 1.8);
+    for (const [x, y, rr] of [[-6, -14, 7], [8, -4, 6], [-14, 2, 5]]) { ctx.save(); ctx.globalAlpha = 0.22; circ(ctx, x * kr, cy + y * k, rr * kr, shade(p.c2, 0.55), 0); ctx.restore(); }
     if (fr > 0) {
-      const pts = [[-14, 6], [10, 10], [-2, -12], [18, -4], [-20, -6], [4, 20]], n = Math.ceil(pts.length * fr);
-      for (let i = 0; i < n; i++) { const [x, y] = pts[i]; circ(ctx, x * k * K, cy + y * k, (big ? 5.5 : 5) * (0.5 + 0.5 * fr), p.id === 'zitrone' || p.id === 'olive' ? p.c1 : p.c1, 1.6); }
+      const pts = [[-18, 8], [12, 12], [-2, -10], [20, -2], [-22, -6], [4, 20], [-10, -20], [14, -18], [-12, 22]], n = Math.ceil(pts.length * fr);
+      const rr = ({ apfel: 5.2, birne: 4.6, zitrone: 4.4, orange: 5.4, kirsche: 3.4, olive: 3.4, avocado: 4.4, pfirsich: 5.2, mango: 4.8, kastanie: 4.6 })[p.id] || 5;
+      for (let i = 0; i < n; i++) { const [x, y] = pts[i]; frucht(ctx, p.id, x * kr, cy + y * k, rr * (0.55 + 0.45 * fr) * (big ? 1.1 : 1), p.c1); }
     }
   },
   blume(ctx, p, k, fr, sw, r) {
-    const h = 44 * k, hx = sw * 30;
+    const h = 46 * k, hx = sw * 30, id = p.id, c1 = p.c1;
     stem(ctx, 0, 0, hx, -h, 0, -h * 0.5, '#4f9a3a', 4);
-    leaf(ctx, 0, -h * 0.35, -0.5, 18 * k, 6, '#5aa845'); leaf(ctx, 0, -h * 0.25, -2.6, 18 * k, 6, '#5aa845');
-    const id = p.id, c1 = p.c1;
-    if (fr <= 0.2) { ell(ctx, hx, -h - 5, 6 * k + 2, 9 * k + 2, col(c1), 0); return; }
+    leaf(ctx, 0, -h * 0.3, -0.35, 24 * k, 7.5 * k, '#5aa845'); leaf(ctx, 0, -h * 0.22, -2.8, 24 * k, 7.5 * k, '#4f9a3a'); leaf(ctx, 0, -h * 0.5, -1.0, 15 * k, 5, '#6ab855');
+    if (fr <= 0.2) { ell(ctx, hx, -h - 5, 6 * k + 2, 9 * k + 2, col(c1), 0); leaf(ctx, hx, -h - 8, -2.2, 8, 3, '#4f9a3a'); leaf(ctx, hx, -h - 8, -0.9, 8, 3, '#4f9a3a'); return; }
     const s = 0.4 + 0.6 * fr;
-    if (id === 'lavendel') { for (let i = 0; i < 3; i++) { const bx = hx + (i - 1) * 7; stem(ctx, hx, -h * 0.6, bx, -h - 12, hx, -h * 0.8, '#6fa55a', 2); for (let j = 0; j < 5; j++) circ(ctx, bx + (j % 2 ? 1.5 : -1.5), -h - 4 - j * 5 * s, 3.2, c1, 1.2); } return; }
-    if (id === 'edelweiss') { for (let i = 0; i < 9; i++) { const a = i / 9 * TAU; leaf(ctx, hx, -h, a, 15 * s, 4.5, '#fbfaf2', null); } circ(ctx, hx, -h, 4, '#f2d25a', 1.5); return; }
+    if (id === 'lavendel') { for (let i = 0; i < 4; i++) { const bx = hx + (i - 1.5) * 7; stem(ctx, hx, -h * 0.55, bx, -h - 12, hx, -h * 0.8, '#6fa55a', 2); for (let j = 0; j < 6; j++) { ell(ctx, bx + (j % 2 ? 1.8 : -1.8), -h - 3 - j * 4.6 * s, 3.2, 2.8, shade(c1, j % 2 ? 0.1 : -0.05), 0, 1.2); } } return; }
+    if (id === 'edelweiss') { for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; leaf(ctx, hx, -h, a, 16 * s, 4.8, i % 2 ? '#fbfaf2' : '#efeddf', '#cfcbb4'); } circ(ctx, hx, -h, 4.5, '#f2d25a', 1.5); dots(ctx, [[-1.5, -1], [1.5, 0], [0, 1.5]].map(([x, y]) => [hx + x, -h + y]), 0.6, '#b8902a'); return; }
     if (id === 'eisblume' || id === 'mondblüte' || id === 'seelenblume') {
-      const gl = ctx.createRadialGradient(hx, -h, 2, hx, -h, 30 * s); gl.addColorStop(0, id === 'mondblüte' ? 'rgba(200,220,255,.7)' : 'rgba(180,240,255,.6)'); gl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = gl; ctx.fillRect(hx - 40, -h - 40, 80, 80);
+      const gl = ctx.createRadialGradient(hx, -h, 2, hx, -h, 32 * s); gl.addColorStop(0, id === 'mondblüte' ? 'rgba(200,220,255,.7)' : 'rgba(180,240,255,.6)'); gl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = gl; ctx.fillRect(hx - 40, -h - 40, 80, 80);
     }
-    const n = id === 'sonnenblume' ? 14 : id === 'ewigelotus' ? 10 : id === 'donnerdistel' ? 12 : 8;
-    const pl = id === 'sonnenblume' ? 17 : 15;
-    for (let ring = id === 'ewigelotus' ? 2 : 1; ring > 0; ring--) for (let i = 0; i < n; i++) { const a = i / n * TAU + ring * 0.3; leaf(ctx, hx, -h, a, pl * s * (ring === 2 ? 1 : 0.8), id === 'sonnenblume' ? 4.5 : 6.5, col(c1, i, performance.now ? 0 : 0), null); }
-    circ(ctx, hx, -h, (id === 'sonnenblume' ? 9 : 5.5) * s, id === 'sonnenblume' ? '#7a4a1e' : id === 'donnerdistel' ? '#6a5ad0' : '#f6cf3a', 1.8);
+    const sonne = id === 'sonnenblume', n = sonne ? 16 : id === 'ewigelotus' ? 10 : id === 'donnerdistel' ? 14 : 8;
+    const pl = sonne ? 18 : 16, pw = sonne ? 4.2 : 7;
+    // hintere Reihe (dunkler, versetzt), dann vordere Reihe
+    for (let ring = 0; ring < 2; ring++) for (let i = 0; i < n; i++) {
+      const a = i / n * TAU + ring * (Math.PI / n), L = pl * s * (ring ? 0.82 : 1);
+      leaf(ctx, hx, -h, a, L, pw * (ring ? 0.9 : 1), ring ? shade(col(c1, i), -0.14) : col(c1, i), sonne ? shade(col(c1, i), -0.3) : null);
+    }
+    if (sonne) { circ(ctx, hx, -h, 10 * s, '#6a3d16', 1.8); circ(ctx, hx, -h, 6.4 * s, '#8a5424', 0); for (let i = 0; i < 10; i++) { const a = i * 2.4, rr = 1 + i * 0.7 * s; circ(ctx, hx + Math.cos(a) * rr, -h + Math.sin(a) * rr, 0.9, '#3a2008', 0); } }
+    else { circ(ctx, hx, -h, 6 * s, id === 'donnerdistel' ? '#6a5ad0' : '#f6cf3a', 1.8); gloss(ctx, hx - 1.8, -h - 2, 2, 0.5); }
   },
   halm(ctx, p, k, fr, sw, r) {
     const id = p.id;
@@ -198,8 +287,9 @@ export function drawPlant(ctx, tile, cx, by, size, tms, seed, opt = {}) {
   const f = Math.min(1, tile.prog / tile.total), ripe = f >= 1, muts = tile.muts || [];
   const r = ((seed * 9301 + 49297) % 233280) / 233280;
   const sw = Math.sin(tms / 800 + seed) * 0.05 * (opt.wind || 1);
-  const u = size / 100;
+  const u = size / 100 * 1.08;
   ctx.save(); ctx.translate(cx, by); ctx.scale(u, u);
+  { const w = 18 + 14 * Math.min(1, f + 0.2); ctx.fillStyle = 'rgba(30,15,0,.28)'; ctx.beginPath(); ctx.ellipse(0, 1, w, 4.5, 0, 0, TAU); ctx.fill(); }
   if (muts.includes('riesig')) ctx.scale(1.25, 1.25);
   ctx.strokeStyle = OUT; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   // Regenbogen-Bogen hinter der Pflanze
