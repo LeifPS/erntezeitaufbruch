@@ -34,6 +34,7 @@ export function neuerStand(now = Date.now()) {
     wasser: Array(START.felderMax).fill(0),        // 0–1
     letzte: Array(START.felderMax).fill(null),     // letzte Familie je Feld
     gebaeude: { brunnen: 0, gewaechshaus: 0, scheune: 0, marktstand: 0, kompost: 0, karawane: 0 },
+    online: null,         // { id, name, token } nach der Anmeldung
     reisen: [],           // Aufbruch-Reisen unterwegs
     auftraege: [],        // Bestellungen aus dem Dorf
     lager: [],            // Ernte: { id, muts:[], n }
@@ -290,4 +291,24 @@ export function gebaeudeBauen(st, id) {
   if (k == null) return { ok: false, grund: 'Schon voll ausgebaut.' };
   if (st.geld < k) return { ok: false, grund: 'Zu wenig Geld.' };
   st.geld -= k; st.gebaeude[id]++; return { ok: true, preis: k };
+}
+
+// ── Lager-Helfer für den Tausch ─────────────────────────
+export function lagerEntnehmen(st, items) {
+  // items: [{id, muts, n}] genau diese Stapel; liefert false und ändert nichts, wenn etwas fehlt
+  for (const it of items) { const e = st.lager.find(x => itemKey(x.id, x.muts) === itemKey(it.id, it.muts)); if (!e || e.n < it.n) return false; }
+  for (const it of items) { const e = st.lager.find(x => itemKey(x.id, x.muts) === itemKey(it.id, it.muts)); e.n -= it.n; }
+  st.lager = st.lager.filter(x => x.n > 0); return true;
+}
+export function lagerHinzu(st, items) { for (const it of items) eintrag(st.lager, it.id, it.muts, it.n); }
+// Wählt aus dem Lager Stapel, die "will" ([{id,n}], beliebige Mutation) erfüllen; die mit dem geringsten Wert zuerst. null, wenn es nicht reicht
+export function tauschAuswahl(st, will) {
+  const aus = [];
+  for (const w of will) {
+    let rest = w.n;
+    const stapel = st.lager.filter(e => e.id === w.id).sort((a, b) => mutMult(a.muts) - mutMult(b.muts));
+    for (const e of stapel) { const t = Math.min(rest, e.n); if (t > 0) { aus.push({ id: e.id, muts: e.muts.slice(), n: t }); rest -= t; } if (rest <= 0) break; }
+    if (rest > 0) return null;
+  }
+  return aus;
 }

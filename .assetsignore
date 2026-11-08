@@ -5,3 +5,8 @@ test
 node_modules
 .git
 .github
+src
+schema.sql
+package.json
+package-lock.json
+.wrangler

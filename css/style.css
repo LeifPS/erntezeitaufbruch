@@ -31,8 +31,8 @@ button.pille{cursor:pointer}
 .knopf.klein{padding:7px 10px;font-size:13.5px;flex:none}
 .knopf[disabled]{opacity:.45;pointer-events:none}
 #dock{position:fixed;left:0;right:0;bottom:0;max-width:640px;margin:0 auto;display:flex;background:var(--karte);border-top:3px solid var(--tinte);padding:6px 6px calc(6px + env(safe-area-inset-bottom));gap:4px;z-index:6}
-#dock button{flex:1;position:relative;font:inherit;font-weight:800;font-size:12px;background:none;border:none;color:var(--tinte);display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;cursor:pointer;border-radius:12px}
-#dock button svg{width:26px;height:26px}
+#dock button{flex:1;min-width:0;position:relative;font:inherit;font-weight:800;font-size:10.5px;background:none;border:none;color:var(--tinte);display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;cursor:pointer;border-radius:12px}
+#dock button svg{width:24px;height:24px}
 #dock button:active,#dock button.an{background:#eadfc0}
 #dock i{position:absolute;top:0;right:22%;background:var(--rot);color:#fff;border-radius:999px;font-style:normal;font-size:11px;padding:1px 6px;display:none}
 #blatt{position:fixed;inset:0;background:rgba(43,36,24,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
@@ -68,3 +68,7 @@ h3{margin:4px 0 0;font-size:15px}
 .gross{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
 .gross canvas{width:130px;height:130px;background:#eadfc0;border-radius:18px;border:3px solid var(--tinte)}
 .leer{text-align:center;opacity:.6;font-weight:700;padding:18px 0}
+
+input.feld,select.feld{font:inherit;font-weight:700;font-size:15px;padding:9px 10px;border:2.5px solid var(--tinte);border-radius:12px;background:#fff;color:var(--tinte);width:100%}
+.zwei{display:flex;gap:8px}.zwei>*{flex:1;min-width:0}
+canvas#besuchcv{display:block;margin:3px auto;border-radius:14px;background:#8fcf5a;box-shadow:0 0 0 3px var(--tinte)}

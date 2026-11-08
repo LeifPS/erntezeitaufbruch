@@ -27,3 +27,14 @@ Läuft ohne Build-Schritt (statische Dateien, ES-Module). Lokal: `python3 -m htt
 
 - **Aufbruch:** Wagen schicken Reisen in 7 Gebiete (Waldrand bis Himmelsinsel, Gebiete schaltet der Ruf frei). Dauer Kurz/Mittel/Lang gegen Proviantkosten. Zurück kommen Samen (auch seltene, die der Markt nicht verkauft, teils mit Mutation) und ein Ereignis mit zwei Wegen. Die Himmelsinsel kann sehr selten geheime Pflanzen bringen. Das Wagenhaus erlaubt mehrere Reisen gleichzeitig.
 - **Aufträge:** Das Dorf bestellt Ernte (teils mit Mutation) gegen mehr Geld als beim Verkauf plus Ruf; drei Bestellungen, 3 Std gültig.
+
+## Online (Stufe 3)
+
+Cloudflare Worker (`src/worker.js`) mit D1-Datenbank (`schema.sql`), gleiche Adresse wie das Spiel (`/api/...`).
+
+- Spielername (3–16 Zeichen, einmalig) mit geheimem Token im Spielstand; wandert mit dem Spielstand-Code.
+- Hof besuchen: der Hof wird alle 90 Sekunden hochgeladen; Besucher sehen ihn (Wachstum wird weitergerechnet) und können Felder gießen. Der Besitzer bekommt das beim nächsten Abgleich (alle 20 Sekunden): Feld gegossen, etwas fruchtbarer. Besucher bekommen +1 Ruf; höchstens 3 Hilfen je Hof und 20 Minuten.
+- Tauschbörse: Angebote mit bis zu 3 Gegenständen, der Tausch läuft über den Server (Angebot wird einmalig vergeben, der Anbieter bekommt die Gegenleistung per Post). Angebote zurückziehen gibt die Ware zurück.
+- Der Server prüft Pflanzen, Mengen und dass die Gegenleistung zum Angebot passt, kann aber nicht prüfen, ob die Ware wirklich im Lager lag. Für ein Familienspiel gedacht, nicht gegen Betrüger gehärtet.
+- Einrichtung: D1-Datenbank `erntezeitaufbruch` anlegen, `schema.sql` ausführen, `database_id` in `wrangler.jsonc` eintragen, das Repo als Worker in Cloudflare verbinden.
+- Lokal testen: `npm i && npx wrangler d1 execute erntezeitaufbruch --local --file=schema.sql && npx wrangler dev --local`.

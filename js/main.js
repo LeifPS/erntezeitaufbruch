@@ -3,6 +3,7 @@ import * as L from './logic.js';
 import * as Art from './art.js';
 import * as Rz from './reisen.js';
 import * as Au from './auftraege.js';
+import { api } from './online.js';
 
 const COLS = START.spalten;
 const $ = s => document.querySelector(s);
@@ -37,6 +38,8 @@ let panelArg = null;
 let lagerReiter = 'ernte';
 let indexFilter = 'alle';
 let ergebnis = null;
+let onlineReiter = 'besuch';
+let hoefeListe = null, tauschListe = null, besuchHof = null, onlineMeldung = '';
 const floats = [];
 
 // ── Ton ────────────────────────────────────────────────
@@ -112,6 +115,34 @@ function frame(tms) {
   }
 }
 
+// ── Online ─────────────────────────────────────────────
+function hofSnapshot(now) {
+  return { felder: st.felder, ruf: st.ruf, entdeckt: Object.keys(st.entdeckt).length, gebaeude: st.gebaeude,
+    tiles: st.tiles.slice(0, st.felder).map((t, i) => t ? { id: t.id, f: t.prog / t.total, rest: Math.round(L.restZeit(st, i, now)), m: t.muts, w: st.wasser[i] > 0 ? 1 : 0 } : null) };
+}
+let lastUpload = 0, lastPost = 0, onlineBusy = false;
+async function onlineSync(force = false) {
+  if (!st.online || onlineBusy) return; const now = Date.now(); onlineBusy = true;
+  try {
+    if (force || now - lastUpload > 90000) { lastUpload = now; await api('hof', { token: st.online.token, hof: hofSnapshot(now) }); }
+    if (force || now - lastPost > 20000) {
+      lastPost = now; const r = await api('post', { token: st.online.token });
+      if (r.ok) {
+        for (const h of r.hilfe) { if (h.idx < st.felder && st.tiles[h.idx]) { st.wasser[h.idx] = 1; st.boden[h.idx] = Math.min(100, st.boden[h.idx] + 10); floatText(h.idx, h.von + ' hat geholfen', '#9fd8ff'); } meldung(`${h.von} hat dein Feld gegossen!`); }
+        for (const p of r.post) if (p.art === 'tausch') { L.lagerHinzu(st, p.items); meldung(`${p.von} hat mit dir getauscht: ${itemsText(p.items)}`); ton('geld'); }
+        if (r.hilfe.length || r.post.length) { speichern(); if (panel === 'online') renderPanel(); }
+      }
+    }
+  } finally { onlineBusy = false; }
+}
+function itemsText(items) { return items.map(e => `${e.n}× ${PLANTS[e.id].name}${e.muts && e.muts.length ? ' (' + e.muts.map(m => MUT[m].name).join(', ') + ')' : ''}`).join(', '); }
+function vor(t) { const m = Math.max(0, Math.round((Date.now() - t) / MIN)); return m < 2 ? 'gerade eben' : m < 60 ? 'vor ' + m + ' Min' : m < 1440 ? 'vor ' + Math.round(m / 60) + ' Std' : 'vor ' + Math.round(m / 1440) + ' T'; }
+async function ladeOnline() {
+  if (onlineReiter === 'besuch') { const r = await api('hoefe'); hoefeListe = r.ok ? r.hoefe : null; onlineMeldung = r.ok ? '' : (r.grund || ''); }
+  else { const r = await api('tausch', { token: st.online ? st.online.token : '' }); tauschListe = r.ok ? r.angebote : null; onlineMeldung = r.ok ? '' : (r.grund || ''); }
+  if (panel === 'online') renderPanel();
+}
+
 // ── Spielschleife (Logik, Kopfzeile, Speichern) ─────────
 let ereignisAnzahl = 0;
 function logikTick() {
@@ -120,6 +151,8 @@ function logikTick() {
   Au.auftraegeAuffuellen(st, now);
   for (const e of ev) if (e.m === 'gold' || e.m === 'regenbogen' || e.m === 'geladen') { floatText(e.idx, MUT[e.m].name + '!', '#ffe27a'); }
   kopfAktualisieren(now);
+  onlineSync();
+  if (panel === 'besuchhof') zeichneBesuch();
   if ((panel === 'aufbruch' || panel === 'auftraege') && Math.floor(now / 1000) % 5 === 0) renderPanel();
 }
 function kopfAktualisieren(now = Date.now()) {
@@ -207,6 +240,8 @@ function renderPanel() {
   else if (panel === 'aufbruch') { titel = 'Aufbruch'; html = htmlAufbruch(now); }
   else if (panel === 'ereignis') { titel = 'Unterwegs'; html = htmlEreignis(); }
   else if (panel === 'ergebnis') { titel = 'Zurück vom Aufbruch'; html = htmlErgebnis(); }
+  else if (panel === 'online') { titel = 'Online'; html = htmlOnline(now); }
+  else if (panel === 'besuchhof') { titel = besuchHof ? 'Hof von ' + besuchHof.name : 'Hof'; html = htmlBesuchHof(); }
   else if (panel === 'bauen') { titel = 'Hof ausbauen'; html = htmlBauen(); }
   else if (panel === 'index') { titel = 'Pflanzen-Index'; html = htmlIndex(); }
   else if (panel === 'pflanze') { titel = PLANTS[panelArg].name; html = htmlPflanze(panelArg); }
@@ -216,6 +251,7 @@ function renderPanel() {
   blTitel.textContent = titel;
   const sc = blInhalt.scrollTop; blInhalt.innerHTML = html; blInhalt.scrollTop = sc;
   blInhalt.querySelectorAll('canvas[data-pi]').forEach(c => Art.plantIcon(c, c.dataset.pi, c.dataset.muts ? c.dataset.muts.split(',') : []));
+  if (panel === 'besuchhof') zeichneBesuch();
   kopfAktualisieren(now);
 }
 function marktZeit() { const el = document.getElementById('markt-zeit'); if (el) el.textContent = dauer(L.naechsterMarkt(Date.now())); }
@@ -294,6 +330,57 @@ function htmlErgebnis() {
   let h = `<div class="karte" style="flex-direction:column;align-items:stretch"><div class="info" style="font-size:15px">${r.text}</div>${r.geld ? `<div class="zeile"><span>Gefunden</span><span>+${fmt(r.geld)} €</span></div>` : ''}<div class="zeile"><span>Ruf</span><span>+${r.ruf}</span></div></div><h3>Mitgebrachte Samen</h3>`;
   for (const e of r.samen) h += `<div class="karte">${pi(e.id, e.muts)}<div class="mitte"><div class="name">${esc(PLANTS[e.id].name)} × ${e.n} ${badge(PLANTS[e.id].rar)}</div><div class="klein">${mutChips(e.muts) || 'ohne Mutation'}</div></div></div>`;
   return h + `<button class="knopf gruen" data-act="zu">Super</button>`;
+}
+function htmlOnline(now) {
+  if (!st.online) return `<div class="info" style="font-size:15px">Besuche die Höfe anderer Spieler, hilf ihnen beim Gießen und tausche Pflanzen. Such dir dafür einen Spielernamen aus. Er ist für alle sichtbar.</div>
+    <input class="feld" id="online-name" maxlength="16" placeholder="Dein Spielername" autocomplete="off"><button class="knopf gruen" data-act="anmelden">Anmelden</button>${onlineMeldung ? `<div class="info" style="color:#d8413a">${esc(onlineMeldung)}</div>` : ''}`;
+  let h = `<div class="karte"><div class="mitte"><div class="name">${esc(st.online.name)}</div><div class="klein">Dein Hof ist für andere sichtbar.</div></div></div>
+    <div class="reiter"><button class="${onlineReiter === 'besuch' ? 'an' : ''}" data-act="oreiter" data-r="besuch">Höfe besuchen</button><button class="${onlineReiter === 'tausch' ? 'an' : ''}" data-act="oreiter" data-r="tausch">Tauschbörse</button></div>`;
+  if (onlineMeldung) h += `<div class="info" style="color:#d8413a">${esc(onlineMeldung)}</div>`;
+  if (onlineReiter === 'besuch') {
+    if (!hoefeListe) return h + '<div class="leer">Lade …</div>';
+    const liste = hoefeListe.filter(x => x.name.toLowerCase() !== st.online.name.toLowerCase());
+    if (!liste.length) return h + '<div class="leer">Noch kein anderer Hof online.</div>';
+    for (const x of liste) h += `<div class="karte"><div class="mitte"><div class="name">${esc(x.name)}</div><div class="klein">Ruf ${x.ruf || 0} · ${x.felder || 0} Felder · ${vor(x.zuletzt)}</div></div><div class="rechts"><button class="knopf gruen klein" data-act="besuchen" data-name="${esc(x.name)}">Besuchen</button></div></div>`;
+    return h;
+  }
+  // Tauschbörse
+  const stapel = st.lager.map(e => `<option value="${esc(L.itemKey(e.id, e.muts))}">${esc(PLANTS[e.id].name)} × ${e.n}${e.muts.length ? ' (' + e.muts.map(m => MUT[m].name).join(', ') + ')' : ''}</option>`).join('');
+  const alle = PLANT_IDS.filter(id => !HIDDEN.includes(PLANTS[id].rar) || st.entdeckt[id]).sort((a, b) => PLANTS[a].name.localeCompare(PLANTS[b].name, 'de')).map(id => `<option value="${id}">${esc(PLANTS[id].name)}</option>`).join('');
+  h += `<h3>Neues Angebot</h3><div class="karte" style="flex-direction:column;align-items:stretch">${st.lager.length ? `
+    <div class="info">Ich gebe</div><div class="zwei"><select class="feld" id="t-gib">${stapel}</select><input class="feld" id="t-gibn" type="number" min="1" value="1" style="max-width:78px"></div>
+    <div class="info">Ich suche</div><div class="zwei"><select class="feld" id="t-will">${alle}</select><input class="feld" id="t-willn" type="number" min="1" value="1" style="max-width:78px"></div>
+    <button class="knopf gold" data-act="tauschneu">Anbieten</button>` : '<div class="info">Du brauchst etwas in der Ernte, das du anbieten kannst.</div>'}</div><h3>Angebote</h3>`;
+  if (!tauschListe) return h + '<div class="leer">Lade …</div>';
+  if (!tauschListe.length) return h + '<div class="leer">Gerade gibt es keine Angebote.</div>';
+  for (const a of tauschListe) {
+    const kann = !a.meins && L.tauschAuswahl(st, a.will);
+    h += `<div class="karte"><div class="mitte"><div class="name">${a.meins ? 'Dein Angebot' : esc(a.von)}</div><div class="klein">Gibt: ${esc(itemsText(a.gibt))}</div><div class="klein">Sucht: ${esc(itemsText(a.will))}</div></div><div class="rechts">${a.meins ? `<button class="knopf grau klein" data-act="tauschzurueck" data-id="${a.id}">Zurückziehen</button>` : `<button class="knopf ${kann ? 'gruen' : 'grau'} klein" data-act="tauschannehmen" data-id="${a.id}" ${kann ? '' : 'disabled'}>Tauschen</button>`}</div></div>`;
+  }
+  return h;
+}
+function htmlBesuchHof() {
+  if (!besuchHof) return '<div class="leer">Lade …</div>';
+  const o = besuchHof.hof;
+  return `<div class="info">Ruf ${o.ruf} · ${o.entdeckt} Pflanzen entdeckt · ${vor(besuchHof.t)}. Tippe auf eine wachsende Pflanze, um sie zu gießen.</div><canvas id="besuchcv"></canvas><button class="knopf grau" data-act="obesuchzu">Zurück</button>`;
+}
+let besuchGeo = null;
+function zeichneBesuch() {
+  const c = document.getElementById('besuchcv'); if (!c || !besuchHof) return;
+  const o = besuchHof.hof, W = Math.min(400, c.parentElement.clientWidth - 12), tsB = Math.floor(W / COLS), rowsB = Math.ceil(o.felder / COLS), d = Math.min(2, window.devicePixelRatio || 1);
+  const w = tsB * COLS, h = tsB * rowsB + 6;
+  if (c.width !== Math.round(w * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); c.style.width = w + 'px'; c.style.height = h + 'px'; }
+  const g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, w, h);
+  const now = Date.now(), vergangen = now - besuchHof.t, season = L.seasonAt(now), tms = performance.now();
+  besuchGeo = { ts: tsB, w, h };
+  for (let i = 0; i < o.felder; i++) {
+    const x = (i % COLS) * tsB, y = Math.floor(i / COLS) * tsB + 3;
+    Art.drawTileBase(g, x, y, tsB, { boden: 80, wasser: 1, season, owned: true });
+    const t = o.tiles[i]; if (!t) continue;
+    const f = t.rest <= vergangen ? 1 : t.f + (1 - t.f) * (vergangen / t.rest);
+    Art.drawPlant(g, { id: t.id, prog: f, total: 1, muts: t.m }, x + tsB / 2, y + tsB * 0.8, tsB * 0.92, tms, i * 7 + 3);
+    if (f >= 1) Art.drawReadyMark(g, x, y, tsB, tms);
+  }
 }
 function htmlBauen() {
   let h = '';
@@ -380,6 +467,19 @@ document.addEventListener('click', ev => {
     case 'reise': { const r = Rz.reiseStarten(st, +d.g, +d.d, now); if (!r.ok) meldung(r.grund, true); else { ton('bauen'); meldung('Der Wagen ist unterwegs!'); speichern(); } renderPanel(); break; }
     case 'reiseheim': panelArg = +d.i; panel = 'ereignis'; renderPanel(); break;
     case 'wahl': { const r = Rz.reiseAbschliessen(st, +d.i, d.w, now); if (!r.ok) { meldung(r.grund, true); break; } ergebnis = r; ton('ernte'); speichern(); panel = 'ergebnis'; renderPanel(); break; }
+    case 'anmelden': { const el = document.getElementById('online-name'); const name = el ? el.value : ''; api('anmelden', { name }).then(r => { if (!r.ok) { onlineMeldung = r.grund; } else { st.online = { id: r.id, name: r.name, token: r.token }; onlineMeldung = ''; speichern(); onlineSync(true); ladeOnline(); } if (panel === 'online') renderPanel(); }); break; }
+    case 'oreiter': onlineReiter = d.r; onlineMeldung = ''; renderPanel(); ladeOnline(); break;
+    case 'besuchen': { besuchHof = null; panel = 'besuchhof'; renderPanel(); api('hof?name=' + encodeURIComponent(d.name)).then(r => { if (!r.ok) { meldung(r.grund, true); panel = 'online'; } else besuchHof = { name: r.name, hof: r.hof, t: r.t }; if (panel === 'besuchhof' || panel === 'online') renderPanel(); }); break; }
+    case 'obesuchzu': panel = 'online'; renderPanel(); ladeOnline(); break;
+    case 'tauschneu': { const gk = document.getElementById('t-gib').value, gn = Math.max(1, Math.floor(+document.getElementById('t-gibn').value || 1)), wid = document.getElementById('t-will').value, wn = Math.max(1, Math.floor(+document.getElementById('t-willn').value || 1));
+      const e = st.lager.find(x => L.itemKey(x.id, x.muts) === gk); if (!e || e.n < gn) { meldung('So viel hast du nicht.', true); break; }
+      const gibt = [{ id: e.id, muts: e.muts.slice(), n: gn }];
+      if (!L.lagerEntnehmen(st, gibt)) { meldung('So viel hast du nicht.', true); break; }
+      api('tausch/neu', { token: st.online.token, gibt, will: [{ id: wid, n: wn }] }).then(r => { if (!r.ok) { L.lagerHinzu(st, gibt); meldung(r.grund, true); } else { meldung('Angebot ist online.'); ton('bauen'); } speichern(); ladeOnline(); }); break; }
+    case 'tauschannehmen': { const a = (tauschListe || []).find(x => x.id === +d.id); if (!a) break; const aus = L.tauschAuswahl(st, a.will); if (!aus) { meldung('Dir fehlt etwas dafür.', true); break; }
+      L.lagerEntnehmen(st, aus);
+      api('tausch/annehmen', { token: st.online.token, id: a.id, gibt: aus }).then(r => { if (!r.ok) { L.lagerHinzu(st, aus); meldung(r.grund, true); } else { L.lagerHinzu(st, r.bekommt); meldung('Getauscht: ' + itemsText(r.bekommt)); ton('geld'); } speichern(); ladeOnline(); }); break; }
+    case 'tauschzurueck': api('tausch/zurueck', { token: st.online.token, id: +d.id }).then(r => { if (!r.ok) meldung(r.grund, true); else { L.lagerHinzu(st, r.gibt); meldung('Angebot zurückgezogen.'); } speichern(); ladeOnline(); }); break;
     case 'filter': indexFilter = d.f; renderPanel(); break;
     case 'pflanze': panelArg = d.id; panel = 'pflanze'; renderPanel(); break;
     case 'giessen': L.giessen(st, +d.i); ton('giessen'); closePanel(); break;
@@ -389,6 +489,12 @@ document.addEventListener('click', ev => {
   }
 });
 bl.addEventListener('click', ev => { if (ev.target === bl) closePanel(); });
+document.addEventListener('click', ev => {
+  const c = ev.target; if (!c || c.id !== 'besuchcv' || !besuchHof || !besuchGeo) return;
+  const r = c.getBoundingClientRect(), x = (ev.clientX - r.left) * (besuchGeo.w / r.width), y = (ev.clientY - r.top - 3) * (besuchGeo.h / r.height);
+  const idx = Math.floor(y / besuchGeo.ts) * COLS + Math.floor(x / besuchGeo.ts); const t = besuchHof.hof.tiles[idx]; if (!t) return;
+  api('helfen', { token: st.online.token, name: besuchHof.name, idx }).then(r2 => { if (!r2.ok) meldung(r2.grund, true); else { ton('giessen'); st.ruf += 1; speichern(); meldung('Gegossen! +1 Ruf für deine Hilfe.'); } });
+});
 
 // ── Start ──────────────────────────────────────────────
 layout();
@@ -402,6 +508,7 @@ setInterval(speichern, 5000);
 document.addEventListener('visibilitychange', () => { if (document.hidden) speichern(); else logikTick(); });
 window.addEventListener('pagehide', speichern);
 requestAnimationFrame(frame);
+if (st.online) { onlineSync(true); }
 if (!st.eingefuehrt) { st.eingefuehrt = true; setTimeout(() => openPanel('willkommen'), 300); }
 speichern();
 if (['localhost', '127.0.0.1'].includes(location.hostname)) window.__EZ = { st: () => st, L, Art, open: openPanel, tipp: tippFeld, wahl: k => { sel = k; } };
