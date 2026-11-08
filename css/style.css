@@ -15,7 +15,7 @@ button.pille{cursor:pointer}
 .muenze{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffe98a,#f2b81e 60%,#c88a0a);border:2px solid var(--tinte);display:inline-block}
 #hofwrap{position:relative;padding:0 0 0}
 #hof{display:block;width:100%;touch-action:manipulation;image-rendering:auto}
-#toast{position:absolute;left:50%;top:10px;transform:translate(-50%,-14px);background:var(--tinte);color:#fff;padding:8px 14px;border-radius:999px;font-weight:700;font-size:14px;opacity:0;pointer-events:none;transition:.25s;max-width:92%;text-align:center;z-index:3}
+#toast{position:fixed;left:50%;top:calc(60px + env(safe-area-inset-top));transform:translate(-50%,-14px);background:var(--gruen2);color:#fff;border:2.5px solid var(--tinte);box-shadow:var(--schatten);padding:9px 16px;border-radius:999px;font-weight:800;font-size:15px;opacity:0;pointer-events:none;transition:.25s;max-width:92%;text-align:center;z-index:40}
 #toast.an{opacity:1;transform:translate(-50%,0)}
 #toast.fehler{background:var(--rot)}
 #leiste{padding:8px 8px 4px;display:flex;flex-direction:column;gap:6px}
@@ -28,8 +28,18 @@ button.pille{cursor:pointer}
 .knopf{font:inherit;font-weight:800;font-size:15px;border:2.5px solid var(--tinte);border-radius:12px;padding:10px 14px;color:#fff;cursor:pointer;box-shadow:var(--schatten);flex:1}
 .knopf:active{transform:translateY(2px);box-shadow:none}
 .knopf.gruen{background:var(--gruen)} .knopf.blau{background:var(--blau)} .knopf.gold{background:var(--gold);color:var(--tinte)} .knopf.rot{background:var(--rot)} .knopf.grau{background:#d8d0bc;color:var(--tinte)}
-.knopf.klein{padding:7px 10px;font-size:13.5px;flex:none}
-.knopf[disabled]{opacity:.45;pointer-events:none}
+.knopf.klein{padding:7px 10px;font-size:13.5px;flex:none;min-width:64px}
+.knopf.grau{background:#9b8a6e;color:#fff}
+.knopf:not([disabled]):hover{filter:brightness(1.07)}
+.knopf[disabled]{background:#e4dec9;color:#9a927c;border-color:#b3ab95;box-shadow:none;pointer-events:none;font-weight:700}
+.karte .beutel{opacity:1;color:var(--gruen2)}
+.karte{position:relative}
+.karte.gekauft{animation:gekauft .7s ease-out}
+@keyframes gekauft{0%{background:#c9f0a8;transform:scale(1.025)}100%{background:var(--karte);transform:none}}
+.flug{position:absolute;right:14px;top:8px;font-weight:900;color:var(--rot);pointer-events:none;animation:flug 1s ease-out forwards}
+@keyframes flug{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-26px)}}
+.pille.zuckt{animation:zuckt .6s ease-out}
+@keyframes zuckt{0%{transform:scale(1)}25%{transform:scale(1.18);background:#ffe98a}100%{transform:scale(1)}}
 #dock{position:fixed;left:0;right:0;bottom:0;max-width:640px;margin:0 auto;display:flex;background:var(--karte);border-top:3px solid var(--tinte);padding:6px 6px calc(6px + env(safe-area-inset-bottom));gap:4px;z-index:6}
 #dock button{flex:1;min-width:0;position:relative;font:inherit;font-weight:800;font-size:10.5px;background:none;border:none;color:var(--tinte);display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;cursor:pointer;border-radius:12px}
 #dock button svg{width:24px;height:24px}

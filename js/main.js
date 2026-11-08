@@ -55,6 +55,7 @@ function ton(art) {
     else if (art === 'ernte') { note(520, 0.1); note(660, 0.1, 0.07); note(880, 0.16, 0.14); }
     else if (art === 'geld') { note(988, 0.07, 0, 'square', 0.07); note(1319, 0.2, 0.07, 'square', 0.07); }
     else if (art === 'giessen') { const b = ac.createBuffer(1, ac.sampleRate * 0.25, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length); const s = ac.createBufferSource(); s.buffer = b; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800; const g = ac.createGain(); g.gain.value = 0.15; s.connect(f).connect(g).connect(ac.destination); s.start(t); }
+    else if (art === 'kauf') { note(660, 0.06, 0, 'square', 0.07); note(880, 0.08, 0.06, 'square', 0.07); note(1175, 0.22, 0.13, 'square', 0.07); }
     else if (art === 'fehler') note(150, 0.18, 0, 'sawtooth', 0.08);
     else if (art === 'bauen') { note(392, 0.1); note(523, 0.1, 0.09); note(784, 0.2, 0.18); }
   } catch (e) { }
@@ -64,8 +65,8 @@ window.LGH_ZEILEN = () => [{ text: 'Ton', an: !!st.einst.ton, setze: v => { st.e
 // ── Hinweis & Meldungen ────────────────────────────────
 let toastT = 0;
 function meldung(text, fehler = false) {
-  const el = $('#toast'); el.textContent = text; el.className = 'an' + (fehler ? ' fehler' : '');
-  clearTimeout(toastT); toastT = setTimeout(() => el.className = '', 2200);
+  const el = $('#toast'); el.textContent = (fehler ? '✕ ' : '✓ ') + text; el.className = 'an' + (fehler ? ' fehler' : '');
+  clearTimeout(toastT); toastT = setTimeout(() => el.className = '', 2800);
   if (fehler) ton('fehler');
 }
 function floatText(idx, txt, farbe = '#fff') { const c = tilePos(idx); floats.push({ x: c.x + ts / 2, y: c.y + ts * 0.3, txt, farbe, t0: performance.now() }); }
@@ -264,12 +265,12 @@ function htmlMarkt(now) {
     const p = PLANTS[s.id], inSeason = p.saison === SEASON_KEYS[season];
     h += `<div class="karte">${pi(s.id)}<div class="mitte"><div class="name">${esc(p.name)} ${badge(p.rar)}</div>
       <div class="klein">Wächst ${dauer(p.min * MIN)} · ${p.typ === 'm' ? 'mehrfach ernten' : 'einmal ernten'} · ${p.saison === 'a' ? 'jede Jahreszeit' : 'mag ' + SEASONS[SEASON_KEYS.indexOf(p.saison)] + (inSeason ? ' (jetzt!)' : '')}</div>
-      <div class="klein">Verkauf ca. ${fmt(p.wert)} € · noch ${s.uebrig}</div></div>
+      <div class="klein">Verkauf ca. ${fmt(p.wert)} € · noch ${s.uebrig}</div><div class="klein beutel">Im Beutel: <b>${L.seedAnzahl(st, L.itemKey(s.id, []))}</b></div></div>
       <div class="rechts"><button class="knopf gold klein" data-act="kaufen" data-id="${s.id}" data-n="1" ${s.uebrig < 1 || st.geld < p.preis ? 'disabled' : ''}>${fmt(p.preis)} €</button>
-      ${s.uebrig >= 5 ? `<button class="knopf grau klein" data-act="kaufen" data-id="${s.id}" data-n="5" ${st.geld < p.preis * 5 ? 'disabled' : ''}>×5</button>` : ''}</div></div>`;
+      ${s.uebrig >= 5 ? `<button class="knopf blau klein" data-act="kaufen" data-id="${s.id}" data-n="5" ${st.geld < p.preis * 5 ? 'disabled' : ''}>×5</button>` : ''}</div></div>`;
   }
   const k = PLANTS.karotte;
-  h += `<h3>Immer da</h3><div class="karte">${pi('karotte')}<div class="mitte"><div class="name">Grundsaat Karotte</div><div class="klein">Damit du nie festsitzt.</div></div><div class="rechts"><button class="knopf gold klein" data-act="kaufen" data-id="karotte-grund" data-n="1" ${st.geld < k.preis ? 'disabled' : ''}>${k.preis} €</button><button class="knopf grau klein" data-act="kaufen" data-id="karotte-grund" data-n="5" ${st.geld < k.preis * 5 ? 'disabled' : ''}>×5</button></div></div>`;
+  h += `<h3>Immer da</h3><div class="karte">${pi('karotte')}<div class="mitte"><div class="name">Grundsaat Karotte</div><div class="klein">Damit du nie festsitzt.</div><div class="klein beutel">Im Beutel: <b>${L.seedAnzahl(st, L.itemKey('karotte', []))}</b></div></div><div class="rechts"><button class="knopf gold klein" data-act="kaufen" data-id="karotte-grund" data-n="1" ${st.geld < k.preis ? 'disabled' : ''}>${k.preis} €</button><button class="knopf blau klein" data-act="kaufen" data-id="karotte-grund" data-n="5" ${st.geld < k.preis * 5 ? 'disabled' : ''}>×5</button></div></div>`;
   if (nr) h += `<div class="info">Mehr Ruf schaltet seltenere Samen frei. Nächste Stufe „${nr.name}“ ab ${nr.ab} Ruf (du hast ${st.ruf}).</div>`;
   return h;
 }
@@ -456,7 +457,19 @@ document.addEventListener('click', ev => {
     case 'einst': if (window.LGH) window.LGH.oeffnen(); break;
     case 'ruf': openPanel('ruf'); break;
     case 'abwaehlen': sel = null; kopfAktualisieren(); break;
-    case 'kaufen': { const r = L.samenKaufen(st, d.id, +d.n, now); if (!r.ok) meldung(r.grund, true); else { ton('geld'); meldung(`Gekauft für ${fmt(r.preis)} €`); speichern(); } renderPanel(); break; }
+    case 'kaufen': {
+      const n = +d.n, r = L.samenKaufen(st, d.id, n, now);
+      if (!r.ok) { meldung(r.grund, true); renderPanel(); break; }
+      const pid = d.id === 'karotte-grund' ? 'karotte' : d.id;
+      ton('kauf'); speichern(); renderPanel();
+      meldung(`${n}× ${PLANTS[pid].name}-Samen gekauft · −${fmt(r.preis)} €`);
+      const zeit = (e, k) => { if (!e) return; e.classList.remove(k); void e.offsetWidth; e.classList.add(k); };
+      zeit(document.getElementById('p-geld'), 'zuckt');
+      const knopf = blInhalt.querySelector(`[data-act="kaufen"][data-id="${d.id}"][data-n="${n}"]`) || blInhalt.querySelector(`[data-act="kaufen"][data-id="${d.id}"]`);
+      const karte = knopf && knopf.closest('.karte'); zeit(karte, 'gekauft');
+      if (karte) { const f = document.createElement('span'); f.className = 'flug'; f.textContent = '−' + fmt(r.preis) + ' €'; karte.appendChild(f); setTimeout(() => f.remove(), 1100); }
+      break;
+    }
     case 'reiter': lagerReiter = d.r; renderPanel(); break;
     case 'waehlen': sel = d.key; closePanel(); kopfAktualisieren(); break;
     case 'verkauf': { const s = L.verkaufen(st, d.key, +d.n, now); if (s) { ton('geld'); meldung(`+${fmt(s)} €`); speichern(); } renderPanel(); break; }
